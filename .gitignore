@@ -1,0 +1,7 @@
+node_modules/
+dist/*
+!dist/ai-doc-sidebar/
+*.zip
+!typora-ai-sidebar.zip
+.env*
+!.env.example
