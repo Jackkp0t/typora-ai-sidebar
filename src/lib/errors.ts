@@ -22,6 +22,8 @@ export function toChineseError(error: unknown): string {
     && (error.name === 'AbortError' || error.name === 'TimeoutError')) {
     return '请求超时，请检查网络或在设置中增加超时时间。';
   }
-  if (error instanceof TypeError) return '网络连接失败，请检查网络、接口地址及服务端跨域（CORS）配置。';
+  if (error instanceof TypeError) {
+    return '网络连接失败，请检查网络、接口地址及服务端跨域（CORS）配置。若在 macOS 上，Typora 可能没有 Node，浏览器 fetch 仍受跨域（CORS）限制。';
+  }
   return '请求失败，请检查配置后重试。';
 }

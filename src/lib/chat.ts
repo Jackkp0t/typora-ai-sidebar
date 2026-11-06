@@ -1,4 +1,5 @@
 import { ChatError, HttpError } from './errors';
+import { createDefaultFetch } from './node-transport';
 import { SSEParser } from './sse';
 
 export interface ChatSettings {
@@ -21,7 +22,7 @@ export interface ChatOptions extends ChatSettings {
 }
 
 /** No DOM/editor access: the caller explicitly supplies the session history. */
-export async function streamChat(options: ChatOptions, fetchImpl: typeof fetch = fetch): Promise<string> {
+export async function streamChat(options: ChatOptions, fetchImpl: typeof fetch = createDefaultFetch()): Promise<string> {
   if (!options.apiKey.trim()) throw new ChatError('请先在插件设置中配置 API Key。');
   const baseUrl = options.baseUrl.trim().replace(/\/+$/, '');
   let url: URL;
@@ -57,7 +58,10 @@ export async function streamChat(options: ChatOptions, fetchImpl: typeof fetch =
       signal: controller.signal,
     });
     checkAbort();
-    if (!response.ok) throw new HttpError(response.status);
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => {});
+      throw new HttpError(response.status);
+    }
     if (!response.body) throw new ChatError('服务未返回流式内容，请检查接口配置。');
     reader = response.body.getReader();
     const decoder = new TextDecoder();
