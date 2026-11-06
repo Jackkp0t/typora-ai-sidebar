@@ -12,6 +12,8 @@ for (const [status, pattern] of [
 }
 test('network, timeout and unknown errors do not expose raw provider text', () => {
   assert.match(toChineseError(new TypeError('Failed to fetch')), /网络.*跨域/);
+  assert.match(toChineseError(new TypeError('Failed to fetch')), /macOS/);
+  assert.match(toChineseError(new TypeError('Failed to fetch')), /Node/);
   assert.match(toChineseError(new DOMException('aborted', 'AbortError')), /超时/);
   assert.match(toChineseError(new DOMException('timeout', 'TimeoutError')), /超时/);
   assert.equal(toChineseError(new Error('secret-key')), '请求失败，请检查配置后重试。');

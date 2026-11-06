@@ -1,3 +1,15 @@
+const __nodeRequire = (function (require) {
+  return typeof require === 'function' ? require : null;
+})((function () {
+  try {
+    if (typeof globalThis.require === 'function') return globalThis.require;
+    if (typeof globalThis.reqnode === 'function') return globalThis.reqnode;
+    if (typeof process !== 'undefined' && process.mainModule && typeof process.mainModule.require === 'function') {
+      return process.mainModule.require.bind(process.mainModule);
+    }
+  } catch (error) {}
+  return null;
+})());
 const module = { exports: {} };
 const require = (id) => {
   if (id === '@typora-community-plugin/core') {
@@ -5,8 +17,14 @@ const require = (id) => {
     if (!core) throw new Error('请先安装并启用 Typora Community Plugin Core 2.10.x');
     return core;
   }
+  if (id === 'http' || id === 'https' || id === 'url' || id === 'node:http' || id === 'node:https' || id === 'node:url') {
+    if (typeof __nodeRequire !== 'function') throw new Error('当前环境没有 Node 内置模块：' + id);
+    const name = id.startsWith('node:') ? id.slice(5) : id;
+    return __nodeRequire(name);
+  }
   throw new Error('未知的运行时依赖：' + id);
 };
+/* ai-doc-sidebar-require-shim */
 "use strict";
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -105,8 +123,193 @@ function toChineseError(error) {
   if (typeof error === "object" && error !== null && "name" in error && (error.name === "AbortError" || error.name === "TimeoutError")) {
     return "\u8BF7\u6C42\u8D85\u65F6\uFF0C\u8BF7\u68C0\u67E5\u7F51\u7EDC\u6216\u5728\u8BBE\u7F6E\u4E2D\u589E\u52A0\u8D85\u65F6\u65F6\u95F4\u3002";
   }
-  if (error instanceof TypeError) return "\u7F51\u7EDC\u8FDE\u63A5\u5931\u8D25\uFF0C\u8BF7\u68C0\u67E5\u7F51\u7EDC\u3001\u63A5\u53E3\u5730\u5740\u53CA\u670D\u52A1\u7AEF\u8DE8\u57DF\uFF08CORS\uFF09\u914D\u7F6E\u3002";
+  if (error instanceof TypeError) {
+    return "\u7F51\u7EDC\u8FDE\u63A5\u5931\u8D25\uFF0C\u8BF7\u68C0\u67E5\u7F51\u7EDC\u3001\u63A5\u53E3\u5730\u5740\u53CA\u670D\u52A1\u7AEF\u8DE8\u57DF\uFF08CORS\uFF09\u914D\u7F6E\u3002\u82E5\u5728 macOS \u4E0A\uFF0CTypora \u53EF\u80FD\u6CA1\u6709 Node\uFF0C\u6D4F\u89C8\u5668 fetch \u4ECD\u53D7\u8DE8\u57DF\uFF08CORS\uFF09\u9650\u5236\u3002";
+  }
   return "\u8BF7\u6C42\u5931\u8D25\uFF0C\u8BF7\u68C0\u67E5\u914D\u7F6E\u540E\u91CD\u8BD5\u3002";
+}
+
+// src/lib/node-transport.ts
+function createDefaultFetch(deps = {}) {
+  return async (input, init) => {
+    const request = deps.request ?? requestFromRequire(deps.requireImpl ?? hostRequire);
+    if (request) return responseFromNode(input, init, request);
+    const fallback = deps.fetchImpl ?? globalThis.fetch;
+    if (typeof fallback !== "function") throw new TypeError("Failed to fetch");
+    return fallback(input, init);
+  };
+}
+function hostRequire(id) {
+  switch (id) {
+    case "http":
+      return require("http");
+    case "https":
+      return require("https");
+    case "url":
+      return require("url");
+    default:
+      throw new Error("\u672A\u77E5\u7684\u8FD0\u884C\u65F6\u4F9D\u8D56\uFF1A" + id);
+  }
+}
+function requestFromRequire(requireImpl) {
+  try {
+    const http = requireImpl("http");
+    const https = requireImpl("https");
+    if (typeof http?.request !== "function" || typeof https?.request !== "function") return null;
+    return (call) => nodeRequest(call.url.protocol === "https:" ? https : http, call);
+  } catch {
+    return null;
+  }
+}
+function nodeRequest(mod, call) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      reject(asTransportError(error, call.signal));
+    };
+    const headers = { ...call.headers };
+    if (!headerValue(headers, "content-length")) {
+      headers["Content-Length"] = String(byteLength(call.body));
+    }
+    let req;
+    try {
+      req = mod.request({
+        protocol: call.url.protocol,
+        hostname: call.url.hostname,
+        port: call.url.port || void 0,
+        path: `${call.url.pathname}${call.url.search}`,
+        method: call.method,
+        headers,
+        signal: call.signal
+      }, (res) => {
+        if (settled) {
+          res.destroy();
+          return;
+        }
+        settled = true;
+        resolve(res);
+      });
+    } catch (error) {
+      fail(error);
+      return;
+    }
+    const onAbort = () => {
+      req.destroy();
+      fail(new DOMException("Aborted", "AbortError"));
+    };
+    if (call.signal?.aborted) {
+      onAbort();
+      return;
+    }
+    call.signal?.addEventListener("abort", onAbort, { once: true });
+    req.on("error", (error) => {
+      call.signal?.removeEventListener("abort", onAbort);
+      fail(error);
+    });
+    try {
+      req.write(call.body);
+      req.end();
+    } catch (error) {
+      fail(error);
+    }
+  });
+}
+async function responseFromNode(input, init, request) {
+  const url = toUrl(input);
+  const incoming = await request({
+    url,
+    method: init?.method ?? "GET",
+    headers: headersToRecord(init?.headers),
+    body: bodyText(init?.body),
+    signal: init?.signal ?? void 0
+  });
+  const status = incoming.statusCode ?? 0;
+  if (status < 200 || status > 599) {
+    incoming.destroy();
+    throw new TypeError("Failed to fetch");
+  }
+  return new Response(incomingToStream(incoming, init?.signal ?? void 0), {
+    status,
+    headers: headerPairs(incoming.headers)
+  });
+}
+function incomingToStream(incoming, signal) {
+  const iterator = incoming[Symbol.asyncIterator]();
+  return new ReadableStream({
+    async pull(controller) {
+      try {
+        if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+        const next = await iterator.next();
+        if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+        if (next.done) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(copyBytes(next.value));
+      } catch (error) {
+        controller.error(signal?.aborted || isAbortError(error) ? new DOMException("Aborted", "AbortError") : error);
+      }
+    },
+    cancel() {
+      incoming.destroy();
+      void iterator.return?.(void 0);
+    }
+  });
+}
+function copyBytes(chunk) {
+  const view = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
+  return new Uint8Array(view);
+}
+function toUrl(input) {
+  if (typeof input === "string") return new URL(input);
+  if (input instanceof URL) return input;
+  return new URL(input.url);
+}
+function headersToRecord(headers) {
+  const out = {};
+  if (!headers) return out;
+  if (typeof Headers !== "undefined" && headers instanceof Headers) {
+    headers.forEach((value, key) => {
+      out[key] = value;
+    });
+    return out;
+  }
+  const pairs = Array.isArray(headers) ? headers : Object.entries(headers);
+  for (const [key, value] of pairs) out[key] = value;
+  return out;
+}
+function headerPairs(headers) {
+  const pairs = [];
+  for (const [key, value] of Object.entries(headers)) {
+    if (value == null) continue;
+    const joined = Array.isArray(value) ? value.join(", ") : value;
+    if (key.toLowerCase() === "transfer-encoding" || key.toLowerCase() === "content-length") continue;
+    pairs.push([key, joined]);
+  }
+  return pairs;
+}
+function bodyText(body) {
+  if (typeof body === "string") return body;
+  if (body == null) return "";
+  if (body instanceof Uint8Array) return new TextDecoder().decode(body);
+  throw new TypeError("Failed to fetch");
+}
+function headerValue(headers, name) {
+  const found = Object.keys(headers).find((key) => key.toLowerCase() === name);
+  return found ? headers[found] : void 0;
+}
+function byteLength(text) {
+  return new TextEncoder().encode(text).byteLength;
+}
+function asTransportError(error, signal) {
+  if (signal?.aborted || isAbortError(error)) return new DOMException("Aborted", "AbortError");
+  if (error instanceof TypeError) return error;
+  return error instanceof Error ? error : new TypeError("Failed to fetch");
+}
+function isAbortError(error) {
+  return typeof error === "object" && error !== null && "name" in error && error.name === "AbortError";
 }
 
 // src/lib/sse.ts
@@ -192,7 +395,7 @@ var SSEParser = class {
 };
 
 // src/lib/chat.ts
-async function streamChat(options, fetchImpl = fetch) {
+async function streamChat(options, fetchImpl = createDefaultFetch()) {
   if (!options.apiKey.trim()) throw new ChatError("\u8BF7\u5148\u5728\u63D2\u4EF6\u8BBE\u7F6E\u4E2D\u914D\u7F6E API Key\u3002");
   const baseUrl = options.baseUrl.trim().replace(/\/+$/, "");
   let url;
@@ -234,7 +437,11 @@ async function streamChat(options, fetchImpl = fetch) {
       signal: controller.signal
     });
     checkAbort();
-    if (!response.ok) throw new HttpError(response.status);
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => {
+      });
+      throw new HttpError(response.status);
+    }
     if (!response.body) throw new ChatError("\u670D\u52A1\u672A\u8FD4\u56DE\u6D41\u5F0F\u5185\u5BB9\uFF0C\u8BF7\u68C0\u67E5\u63A5\u53E3\u914D\u7F6E\u3002");
     reader = response.body.getReader();
     const decoder = new TextDecoder();

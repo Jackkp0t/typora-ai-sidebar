@@ -58,6 +58,7 @@ typora-ai-sidebar.zip
 
    [官方插件安装文档](https://github.com/typora-community-plugin/typora-community-plugin/blob/main/docs/zh-cn/user-guide/2-plugin-installation.md)列出传统全局目录 `~/.typora/community-plugins/plugins`；当前[加载器](https://github.com/typora-community-plugin/typora-community-plugin/blob/main/packages/core/src/plugin/plugin-manager.ts)则使用运行时计算的目录，因此以 Console 显示的路径为准。
 5. 重新启动 Typora，打开 core 设置（默认 `Ctrl+.`）→「已安装插件」，启用「AI 文档解读侧边栏」。点击 Ribbon 中的 **AI** 按钮打开面板。
+6. **更新后必须重新加载插件。** 覆盖 `main.js` 后，在 core 设置中禁用再启用「AI 文档解读侧边栏」，或重启 Typora。不重新加载时，当前窗口仍运行旧代码。
 
 不要在插件目录中再嵌套 `dist/`。正确结构是 `plugins/ai-doc-sidebar/manifest.json`。
 
@@ -67,7 +68,7 @@ typora-ai-sidebar.zip
 
 | 设置 | 默认值 | 说明 |
 | --- | --- | --- |
-| Base URL | `https://api.openai.com/v1` | 兼容接口根地址，不含 `/chat/completions` |
+| Base URL | `https://api.openai.com/v1` | 兼容接口根地址，不含 `/chat/completions`。中转示例：`https://bmc-llm-relay.bluemediagroup.cn/v1` |
 | API Key | 空 | 必填，使用密码框显示 |
 | 模型 | `gpt-4o-mini` | 服务支持的模型名称 |
 | 系统提示词 | 你是文档解读助手。请解读用户提供的文档内容，讲清结构与要点，用中文回答。 | 每次请求的 system 消息 |
@@ -78,6 +79,17 @@ API Key 由 core 保存到本地设置文件，密码框仅隐藏显示，设置
 > **注意：**
 > - 设置修改后由 core 约 **1 秒防抖**再写盘；改完请稍等 1 秒以上再关闭 Typora，否则最后一次修改可能未保存。
 > - 若插件安装在**笔记库内**（`<笔记库>/.typora/plugins/`），API Key 会以**明文**保存在该笔记库的 `.typora` 目录中。同步、分享或提交该笔记库（如 Git、网盘）前请排除 `.typora/`，或改用全局安装。
+
+### 网络与跨域
+
+Windows 和 Linux 的 Typora 自带 Node.js。发送消息时插件优先用 Node 的 `https` / `http` 请求 `Base URL + /chat/completions`，不经过浏览器 `fetch`，因此**不受渲染进程跨域（CORS）限制**。Base URL 只写到版本前缀，例如：
+
+- `https://api.openai.com/v1`
+- `https://bmc-llm-relay.bluemediagroup.cn/v1`
+
+macOS 版 Typora 不提供 Node（见 [typora-community-plugin 兼容层说明](https://github.com/typora-community-plugin/typora-community-plugin/blob/main/docs/zh-cn/dev-guide/2-plugin.md)）。这时才会退回浏览器 `fetch`，服务端仍须放行 Typora 页面的跨域，否则会提示网络连接失败。
+
+更新到含此传输的版本后，请重新加载插件（禁用再启用，或重启 Typora）。
 
 ## 使用
 
@@ -99,10 +111,10 @@ MVP 将模型输出作为纯文本显示，保留换行，不执行 HTML，也�
 
 1. Console 检查插件加载错误，确认 core 已安装且为 2.10.x。
 2. Network 检查 `POST <Base URL>/chat/completions`，请求体应有 `stream: true` 和预期的 `messages`。不要分享包含 Authorization 的截图或日志。
-3. 连接失败时检查 Base URL、模型、网络和服务端 CORS 设置。浏览器 `fetch` 无法绕过服务端跨域限制。
+3. 连接失败时检查 Base URL、模型与网络。Windows / Linux 走 Node HTTPS，不依赖服务端 CORS；macOS 没有 Node 时仍用浏览器 `fetch`，跨域限制仍然有效。
 4. 检查缺 Key、空选区、Enter/Shift+Enter、中文输入法、流式禁用发送、清空取消、错误气泡、禁用后重新启用。
 
-`npm test` 用 esbuild 编译 TypeScript 测试，再运行 Node 原生 `node --test`，无需 API Key 和网络。覆盖 SSE 分片/CRLF/多 data 行/DONE/finish_reason 结束（无 DONE）/异常事件、选区读取（含 CodeMirror 回退）、中文错误映射，以及请求体、UTF-8、超时、取消和截断流。当前环境未运行真实 Typora，安装后的桌面验收仍需按上述步骤执行。
+`npm test` 用 esbuild 编译 TypeScript 测试，再运行 Node 原生 `node --test`，无需 API Key 和网络。覆盖 SSE 分片/CRLF/多 data 行/DONE/finish_reason 结束（无 DONE）/异常事件、选区读取（含 CodeMirror 回退）、中文错误映射，请求体、UTF-8、超时、取消和截断流，以及 Node HTTP 传输（本地服务成功、超时取消、不经过浏览器 `fetch`）。当前环境未运行真实 Typora，安装后的桌面验收仍需按上述步骤执行。
 
 ## 源码
 

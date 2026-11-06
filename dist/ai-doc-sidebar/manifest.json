@@ -5,7 +5,7 @@
   "author": "AI Doc Sidebar Contributors",
   "authorUrl": "https://github.com/Jackkp0t",
   "repo": "Jackkp0t/typora-ai-sidebar",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "minAppVersion": "1.4.8",
   "minCoreVersion": "2.10.0",
   "platforms": ["win32", "linux", "darwin"]
