@@ -1,0 +1,20 @@
+{
+  "name": "ai-doc-sidebar",
+  "version": "0.1.0",
+  "private": true,
+  "engines": { "node": ">=22.7.0" },
+  "description": "Typora AI 文档解读侧边栏",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node scripts/test.mjs",
+    "zip": "npm run build && node scripts/zip.mjs"
+  },
+  "devDependencies": {
+    "@typora-community-plugin/core": "~2.10.0",
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.25.0",
+    "jszip": "^3.10.1",
+    "typescript": "^5.9.0"
+  }
+}

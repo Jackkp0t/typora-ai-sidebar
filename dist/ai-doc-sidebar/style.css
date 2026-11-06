@@ -1,0 +1,57 @@
+.ai-doc-sidebar {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+  padding: 16px 12px;
+  color: var(--text-color, inherit);
+  background: var(--side-bar-bg-color, transparent);
+  font-size: 13px;
+}
+.ai-doc-sidebar h2 { margin: 0; font-size: 17px; }
+.ai-doc-sidebar-description, .ai-doc-sidebar-status { margin: 0; line-height: 1.5; }
+.ai-doc-sidebar-description, .ai-doc-sidebar small { opacity: .7; }
+.ai-doc-sidebar-messages { flex: 1; min-height: 100px; overflow-y: auto; overscroll-behavior: contain; }
+.ai-doc-sidebar-message {
+  margin: 0 0 12px;
+  padding: 10px;
+  border: 1px solid rgba(128, 128, 128, .25);
+  border-radius: 8px;
+  line-height: 1.65;
+}
+.ai-doc-sidebar-message strong { display: block; margin-bottom: 4px; opacity: .7; font-size: 11px; }
+.ai-doc-sidebar-user { background: rgba(80, 130, 200, .1); }
+.ai-doc-sidebar-content { white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.ai-doc-sidebar-error { color: var(--danger-color, #c34b4b); }
+.ai-doc-sidebar textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 90px;
+  max-height: 35vh;
+  padding: 10px;
+  resize: vertical;
+  border: 1px solid rgba(128, 128, 128, .4);
+  border-radius: 6px;
+  color: inherit;
+  background: var(--bg-color, transparent);
+  font: inherit;
+  user-select: text;
+}
+.ai-doc-sidebar-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.ai-doc-sidebar button {
+  padding: 6px 10px;
+  border: 1px solid rgba(128, 128, 128, .35);
+  border-radius: 5px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.ai-doc-sidebar button:disabled { opacity: .5; cursor: wait; }
+.ai-doc-sidebar button:hover:not(:disabled) { background: rgba(128, 128, 128, .15); }
+.ai-doc-sidebar .ai-doc-sidebar-send { background: rgba(80, 130, 200, .18); }
+.ai-doc-sidebar :focus-visible { outline: 2px solid var(--select-text-bg-color, #608bc4); outline-offset: 2px; }
+.ai-doc-sidebar-status { min-height: 1.5em; }
+.ai-doc-sidebar-icon { font: bold 12px sans-serif; }
